@@ -1,0 +1,205 @@
+# Configure Notes
+## Day 2
+---
+- Local package repository
+- Configure fileshare and local packages
+
+    - `sudo yum install yum-utils`
+    - `ll /repo`
+    - `sudo reposync -l --repoid=extras --download_path=/repo/local-extras` 
+    >add local-extras to repo dir 
+    
+    >coming to the repo
+- `sudo yum install createrepo`
+>generates database files so yum can use
+
+`sudo createrepo local-extras`
+>must be in repo
+
+`ll /repo/local-extras`
+>verify content is there
+
+`sudo vi /etc/nginx/conf.d/packages.conf`
+>Create an nginx conf flie
+
+`mkdir ~/archive`
+>make an archive in ~ directory
+
+`sudo yum list zeek`
+>See where yum in pulling from
+
+`ll /etc/yum.repos.d`
+`sudo mv /etc/yum.repos.d/* ~/archive`
+>move all yum.repos.d to the archive dir
+
+`cd /etc/yum.repos.d`
+`sudo curl -LO http://repo:8000/local.repo`
+`cat local.repo`
+`sudo vi local.repo`
+>Full path /etc/yum.repos.d/local.repo`
+
+`sudo yum makecache fast`
+>Download and make metadata usable for yum
+
+`sudo yum list zeek`
+
+---
+## Securing Repo in Fileshare
+
+`mkdir ~/certs`
+
+`cd ~/certs`
+
+`openssl genrsa -des3 -out localCA.key 2048`
+>create private key for the certificate authority
+
+`openssl req -x509 -new -nodes -key localCA.key sha256 -days 1095 -out localCA.crt`
+>Root authority
+
+`openssl genrsa -out repo.key 2048`
+
+`openssl req -new -key repo.key -out repo.csr`
+>Request new key for the root authority
+
+`sudo vi ~/certs/repo.txt`
+>Certificate extension creation to browse Fileshare
+
+```
+authorityKeyIdentifier=keyid,issuer
+basicConstraints=CA:FALSE
+keyUsage = digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = repo
+IP.1 = 10.81.139.10
+```
+`openssl x509 -req -in repo.csr -CA local.crt -CAkey local.key -CAcreateserial -out repo.crt -days 365 -sha256 -extfile repo.ext`
+>generate repo certificate
+
+`sudo mv repo.key /etc/nginx`
+
+`sudo mv repo.crt /etc/nginx`
+>Move the repos into nginx
+
+`cd /etc/nginx/conf.d`
+
+`sudo curl -LO http://repo:8000/nginx/proxy.conf`
+
+`sudo vi /etc/nginx/nginx.conf`
+>Disable default port 80 listener
+
+>Put # on line 39-41
+
+`sudo vi /etc/nginx/conf.d/packages.conf`
+>Modify packages to listen to the localhost
+
+>Change listen 127.0.0.1:8008;
+
+```
+server {
+
+  listen 127.0.0.1:8008;
+
+  location / {
+
+    root /repo;
+
+    autoindex on;
+
+    index index.html index.htm;
+
+  }
+
+}
+```
+>Do the same for fileshare.conf but port 8000.
+```
+server {
+  listen 127.0.0.1:8000;
+  location / {
+    root /usr/share/nginx/fileshare;
+    autoindex on;
+    index index.html index.htm;
+  }
+}
+```
+>Add ports 80 and 443 to firewall
+
+`sudo firewall-cmd --add-port={80,443}/tcp --permanent`
+
+`sudo firewall-cmd --remove-port={8000,8008}/tcp --permanent`
+
+`sudo firewall-cmd --reload`
+
+`sudo firewall-cmd --list-all`
+
+`sudo systemctl restart nginx`
+
+`sudo systemctl status nginx`
+
+`ss -lnt`
+
+`sudo vi /etc/yum.repos.d/local.repo`
+
+>Every box do following
+
+`mkdir ~/archive`
+
+`sudo mv /etc/yum.repos.d/* ~/archive`
+
+`sudo vi /etc/yum.repos.d/local.repo`
+
+```
+[local-base]
+name=local-base
+baseurl=https://repo/packages/local-base/
+enabled=1
+gpgcheck=0
+
+[local-rocknsm-2.5]
+name=local-rocknsm-2.5
+baseurl=https://repo/packages/local-rocknsm-2.5/
+enabled=1
+gpgcheck=0
+
+[local-elasticsearch-7.x]
+name=local-elasticsearch-7.x
+baseurl=https://repo/packages/local-elastic-7.x/
+enabled=1
+gpgcheck=0
+
+[local-epel]
+name=local-epel
+baseurl=https://repo/packages/local-epel/
+enabled=1
+gpgcheck=0
+
+[local-extras]
+name=local-extras
+baseurl=https://repo/packages/local-extras/
+enabled=1
+gpgcheck=0
+
+[local-updates]
+name=local-updates
+baseurl=https://repo/packages/local-updates/
+enabled=1
+gpgcheck=0
+```
+`for host in sensor elastic{0..2} pipeline{0..2} kibana; do scp ~/certs/localCA.crt elastic@$host:/home/elastic/localCA.crt ; done`
+
+>On each box run below
+
+`sudo mv ~/localCA.crt /etc/pki/ca-trust/source/anchors/localCA.crt`
+
+`sudo update-ca-trust`
+`sudo yum makecache fast`
+
+---
+
+>On the student Ubuntu box
+
+`sudo scp elastic@repo:/home/elastic/certs/localCA.crt ~/localCA.crt`
+
+
