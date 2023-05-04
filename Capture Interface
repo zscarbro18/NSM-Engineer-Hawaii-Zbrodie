@@ -1,0 +1,229 @@
+# Configure Capture Interface
+## Day 3
+---
+
+>SSH into the sensor
+
+`sudo yum install ethtool`
+
+>ethtool is utliity for managing the NICs
+
+> Eth0 capture interface
+
+>Eth1 Management Interface
+
+`sudo ethtool -k eth1`
+
+`sudo curl -LO https://repo/fileshare/interface.sh`
+
+`ll`
+
+`sudo chmod +x interface.sh`
+>Changes permission for the interface to execute
+
+`sudo ./interface.sh eth1`
+
+`sudo vi /sbin/ifup-local`
+> Makes it run on startup
+
+```
+#!/bin/bash
+if [[ "$1" == "eth1" ]]
+then
+for i in rx tx sg tso ufo gso gro lro rxvlan txvlan
+do
+/usr/sbin/ethtool -K $1 $i off
+done
+/usr/sbin/ethtool -N $1 rx-flow-hash udp4 sdfn
+/usr/sbin/ethtool -N $1 rx-flow-hash udp6 sdfn
+/usr/sbin/ethtool -n $1 rx-flow-hash udp6
+/usr/sbin/ethtool -n $1 rx-flow-hash udp4
+/usr/sbin/ethtool -C $1 rx-usecs 10
+/usr/sbin/ethtool -C $1 adaptive-rx off
+/usr/sbin/ethtool -G $1 rx 4096
+
+/usr/sbin/ip link set dev $1 promisc on
+
+fi
+```
+---
+`sudo chmod +x /sbin/ifup-local`
+>Changes permission to add execute
+
+`sudo vi /etc/sysconfig/network-scripts/ifup`
+
+>Add this at the very end of the script
+
+```
+if [ -x /sbin/ifup-local ]; then
+
+/sbin/ifup-local ${DEVICE}
+
+fi
+```
+
+`sudo vi /etc/sysconfig/network-scripts/ifcfg-eth1`
+
+```
+DEVICE=eth1
+BOOTPROTO=none
+ONBOOT=yes
+NM_CONTROLLED=no
+TYPE=ETHERNET
+```
+
+> makes sure that you have an eth1 interface
+
+`sudo systemctl restart network`
+> Restart the network to see if the changes took effect
+
+`sudo ethtool -k eth1`
+> Checks to eth1 features
+
+`sudo tcpdump -nn -i eth1`
+
+`sudo tcpdump -nn -i eth1 '!port 22'`
+
+`sudo yum install stenographer`
+>Command to install stenographer
+
+`sudo yum install which`
+
+`cd /etc/stenographer/`
+
+`sudo vi /etc/stenographer/config`
+
+```
+{
+  "Threads": [
+    { "PacketsDirectory": "/data/stenographer/packets"
+    , "IndexDirectory": "/data/stenographer/index"
+    , "MaxDirectoryFiles": 30000
+    , "DiskFreePercentage": 30
+    }
+  ]
+  , "StenotypePath": "/usr/bin/stenotype"
+  , "Interface": "eth1"
+  , "Port": 1234
+  , "Host": "127.0.0.1"
+  , "Flags": []
+  , "CertPath": "/etc/stenographer/certs"
+}
+```
+
+`sudo mkdir -p /data/stenographer/{packets,index}`
+> Create these directorys that were put inside the config file
+
+`sudo chown -R stenographer:stenographer /data/stenographer/`
+>changing the user and groups of /data/stenographer
+
+`sudo stenokeys.sh stenographer stenographer`
+
+>Creating certs to see what is in the index and packets dir
+
+`ll /etc/stenographer/certs/`
+>Checks to see that it made the  client servers and keys
+
+`sudo systemctl enable stenographer --now`
+
+`sudo systemctl status stenographer`
+
+`sudo stenoread 'host 8.8.8.8'`
+>passes the query over to tcpdump
+
+`cd /data/stenographer/`
+
+`cd packets`
+
+`watch ls -al`
+>see what senographer is running in real time
+
+`df -h`
+> looks at disk space
+
+`sudo yum install suricata`
+
+`sudo -s`
+>Escalte privligaes
+
+# Installing Suricata
+`ll /etc/suricata`
+
+`vi /etc/suricata/suricata.yaml`
+> line 56 /data/suricata
+
+>line 60 no
+
+>line 76 no
+
+>Line 404 no
+
+>Line 557 no
+
+>Line 580 eth1
+
+>Line 582 remove the # and change auto to 3
+
+>Line 981-983 remove the # and change user and group to suricata
+
+>Line 1500 no
+
+>line 1516 no
+
+> Line 1521 no
+
+>line 1527 no
+
+>Line 1536 no
+
+`sudo vi /etc/sysconfig/suricata`
+```
+# The following parameters are the most commonly needed to configure
+# suricata. A full list can be seen by running /sbin/suricata --help
+# -i <network interface device>
+# --user <acct name>
+# --group <group name>
+
+# Add options to be passed to the daemon
+OPTIONS="--af-packet=eth1 --user suricata --group suricata"
+```
+
+`sudo vi /etc/suricata/suricata.yaml`
+
+>Line 1434 yes
+
+>Line 1452 instead of all change it to 0-2
+
+>Line 1459 change medium to 1
+
+>line 1460 change high to 2
+
+>Line 1461 change default to high
+
+`sudo suricata-update add-source emergingthreats https://repo/fileshare/emerging.rules.tar.gz`
+
+>using suricata update to point emerging.rules
+
+`sudo suricata-update`
+
+>Updating rules on the sensor
+
+`ll /data`
+
+`sudo mkdir -p /data/suricata`
+
+`sudo chown -R suricata:suricata /data/suricata/`
+
+`sudo systemctl enable suricata --now`
+
+`sudo systemctl status suricata`
+
+
+
+
+
+
+
+
+
+
