@@ -1,0 +1,208 @@
+# zeek
+> Zeek and FSF will be on the sensor
+---
+`sudo yum install zeek`
+
+`sudo yum install zeek-plugin-af_packet`
+
+> Allows af_packet on the nic to send raw traffic to zeek
+
+`sudo yum install zeek-plugin-kafka`
+
+>Allows zeek to send logs to kafka over the network
+
+`sudo vi /etc/zeek/zeekctl.cfg `
+
+`:set nu`
+
+>line 67 /data/zeek
+
+>on line 68 type: lb_custom.InterfacePrefix=af_packet::
+
+**Tells zeek to use af_packet***
+
+`sudo vi /etc/zeek/node.cfg `
+
+`:set nu`
+
+>comment line 8-11 with #
+
+>Uncomment lines 16-31 Remove all the #
+
+>Line 23 add pin_cpus=1
+
+>Line 32 change eth0 to eth1
+
+>line 33 add lb_method=custom
+
+>line 34 add lb_procs=2
+
+>line 35 add pin_cpus=2,3
+
+>Line 36 add env_vars=fanout_id=77
+
+`lscpu -e`
+
+>shows the core cpus that are running
+
+`sudo mkdir /usr/share/zeek/site/scripts`
+
+`cd /usr/share/zeek/site/scripts/`
+
+---
+
+`sudo curl -LO https://repo/fileshare/zeek/afpacket.zeek`
+
+`sudo curl -LO https://repo/fileshare/zeek/extension.zeek`
+
+`sudo curl -LO https://repo/fileshare/zeek/extract-files.zeek`
+
+
+`sudo curl -LO https://repo/fileshare/zeek/fsf.zeek`
+
+
+`sudo curl -LO https://repo/fileshare/zeek/json.zeek`
+
+`sudo curl -LO https://repo/fileshare/zeek/kafka.zeek`
+
+`cd ..`
+
+`sudo vi /usr/share/zeek/site/local.zeek`
+
+```
+@load ./scripts/afpacket.zeek
+@load ./scripts/extension.zeek 
+redef ignore_checksums = T;
+```
+>Add at the end of the script
+
+`sudo mkdir -p /data/zeek`
+
+`sudo chown -R zeek: /data/zeek/`
+
+`sudo chown -R zeek: /etc/zeek/`
+
+`sudo chown -R zeek: /usr/share/zeek/`
+
+`sudo chown -R zeek: /usr/bin/zeek`
+
+`sudo chown -R zeek: /usr/bin/capstats`
+
+`sudo chown -R zeek: /var/spool/zeek`
+
+`sudo /sbin/setcap cap_net_raw,cap_net_admin=eip /usr/bin/zeek`
+
+`sudo /sbin/setcap cap_net_raw,cap_net_admin=eip /usr/bin/capstats`
+
+>Setting the capabilities of the zeek user so it can read network traffic and set the binaries
+
+`sudo -u zeek zeekctl deploy`
+
+`cd /data/zeek/current`
+
+`ll`
+
+>check to see if zeek is work. should have a conn.log
+
+`sudo yum install fsf`
+
+`sudo vi /opt/fsf/fsf-server/conf/config.py`
+
+>configure scanning portion of fsf
+
+```
+#!/usr/bin/env python
+#
+# Basic configuration attributes for scanner. Used as default
+# unless the user overrides them.
+#
+
+import socket
+
+SCANNER_CONFIG = { 'LOG_PATH' : '/data/fsf',
+                   'YARA_PATH' : '/var/lib/yara-rules/rules.yara',
+                   'PID_PATH' : '/run/fsf/fsf.pid',
+                   'EXPORT_PATH' : '/data/fsf/archive',
+                   'TIMEOUT' : 60,
+                   'MAX_DEPTH' : 10,
+                   'ACTIVE_LOGGING_MODULES' : ['rockout'],
+                   }
+
+SERVER_CONFIG = { 'IP_ADDRESS' : "localhost",
+                  'PORT' : 5800 }
+```
+
+`sudo mkdir -p /data/fsf/archive`
+
+`sudo chown -R fsf: /data/fsf`
+
+`sudo vi /opt/fsf/fsf-client/conf/config.py`
+
+```
+#!/usr/bin/env python
+#
+# Basic configuration attributes for scanner client.
+#
+
+# 'IP Address' is a list. It can contain one element, or more.
+# If you put multiple FSF servers in, the one your client chooses will
+# be done at random. A rudimentary way to distribute tasks.
+SERVER_CONFIG = { 'IP_ADDRESS' : ['localhost',],
+                  'PORT' : 5800 }
+
+# Full path to debug file if run with --suppress-report
+CLIENT_CONFIG = { 'LOG_FILE' : '/tmp/client_dbg.log' }
+```
+
+`sudo vi /usr/lib/systemd/system/fsf.service`
+
+> Don't change anything
+
+`sudo systemctl enable fsf --now`
+
+`Sudo systemctl status fsf`
+
+`/opt/fsf/fsf-client/fsf_client.py --full interface.sh`
+
+>scan the interface.sh
+
+`cd /usr/share/zeek/site/`
+
+`sudo vi /usr/share/zeek/site/local.zeek`
+
+>Add to the rest at the bottom
+
+```
+@load ./scripts/extract-files.zeek
+@load ./scripts/fsf.zeek
+@load ./scripts/json.zeek
+```
+`sudo -u zeek zeekctl stop`
+
+`sudo -u zeek zeekctl deploy`
+
+`sudo -u zeek zeekctl status`
+
+`cd /data/fsf`
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
